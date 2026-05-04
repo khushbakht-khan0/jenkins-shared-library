@@ -1,29 +1,27 @@
-#!/usr/bin/env groovy
-import org.devops.NotificationService
+package org.devops
 
-/**
- * notifySlack - Global variable to send Slack notifications
- *
- * Usage:
- *   notifySlack(message: 'Build passed!', color: 'good')
- *   notifySlack(message: 'Build failed!', color: 'danger')
- *
- * Required params:
- *   message (String) - Message to send
- *
- * Optional params:
- *   color (String) - 'good', 'danger', 'warning' (default: 'good')
- */
-def call(Map params = [:]) {
+class NotificationService implements Serializable {
 
-    // Validate required params
-    if (!params.message) {
-        error("notifySlack: 'message' parameter is required")
+    def script
+
+    NotificationService(script) {
+        this.script = script
     }
 
-    String message = params.message
-    String color   = params.color ?: 'good'
-
-    def notifier = new NotificationService(this)
-    notifier.sendSlack(message, color)
+    def sendSlack(String message, String color = 'good') {
+        try {
+            script.withCredentials([script.string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                def payload = groovy.json.JsonOutput.toJson([
+                    attachments: [[
+                        color: color,
+                        text: message,
+                        fallback: message
+                    ]]
+                ])
+                script.sh """curl -s -X POST -H 'Content-type: application/json' --data '${payload}' \${SLACK_URL}"""
+            }
+        } catch (Exception e) {
+            script.echo "Slack notification failed: ${e.message}"
+        }
+    }
 }
