@@ -1,27 +1,20 @@
-package org.devops
-
-class NotificationService implements Serializable {
-
-    def script
-
-    NotificationService(script) {
-        this.script = script
+def call(Map params = [:]) {
+    if (!params.message) {
+        error("notifySlack: 'message' parameter is required")
     }
 
-    def sendSlack(String message, String color = 'good') {
-        try {
-            script.withCredentials([script.string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-                def payload = groovy.json.JsonOutput.toJson([
-                    attachments: [[
-                        color: color,
-                        text: message,
-                        fallback: message
-                    ]]
-                ])
-                script.sh """curl -s -X POST -H 'Content-type: application/json' --data '${payload}' \${SLACK_URL}"""
-            }
-        } catch (Exception e) {
-            script.echo "Slack notification failed: ${e.message}"
+    String message = params.message
+    String color   = params.color ?: 'good'
+
+    try {
+        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+            sh """
+                curl -s -X POST -H 'Content-type: application/json' \
+                --data '{"attachments":[{"color":"${color}","text":"${message}"}]}' \
+                \$SLACK_URL
+            """
         }
+    } catch (Exception e) {
+        echo "Slack notification skipped: ${e.message}"
     }
 }
